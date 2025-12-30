@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Form,
@@ -20,6 +20,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { PlusCircle, Trash2, Loader2, ArrowRight } from "lucide-react";
 import type { Shop } from "@/lib/types";
+import { format } from "date-fns";
 
 const shopsData: Record<string, Shop> = {
     kapish: { id: "kapish", name: "Kapish Photo Frame", address: "123 Frame St, Market City", contact: "+91 1234567890"},
@@ -60,6 +61,7 @@ export default function BillingPage() {
   const shopId = searchParams.get("shop") as 'kapish' | 'sunny' | null;
   const [shop, setShop] = useState<Shop | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentDate] = useState(new Date());
 
   const form = useForm<BillFormData>({
     resolver: zodResolver(billSchema),
@@ -104,7 +106,7 @@ export default function BillingPage() {
       items: data.items,
       totalAmount,
       paymentStatus: 'Due',
-      createdAt: new Date().toISOString(),
+      createdAt: currentDate.toISOString(),
     };
     
     localStorage.setItem('currentBill', JSON.stringify(bill));
@@ -173,7 +175,8 @@ export default function BillingPage() {
 
               <Card>
                   <CardHeader>
-                      <CardTitle>Bill Total</CardTitle>
+                      <CardTitle>Bill Details</CardTitle>
+                       <CardDescription>{format(currentDate, "PPP")}</CardDescription>
                   </CardHeader>
                   <CardContent>
                       <ItemsTotal control={form.control} />
