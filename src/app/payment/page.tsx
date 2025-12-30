@@ -44,16 +44,27 @@ export default function PaymentPage() {
     if (!bill) return;
     setIsLoading(true);
     
-    const finalBill = {
+    const finalBill: Bill = {
       ...bill,
       paymentMode,
-      paymentStatus: 'Paid' as 'Paid' | 'Due',
+      paymentStatus: 'Paid',
     };
     
     localStorage.setItem('currentBill', JSON.stringify(finalBill));
-    
-    // In a real app, you would save this to Firestore here
-    // and maybe get a confirmed bill ID
+
+    // Save to history
+    try {
+      const history = JSON.parse(localStorage.getItem('billsHistory') || '[]') as Bill[];
+      history.unshift(finalBill); // Add to the beginning of the array
+      localStorage.setItem('billsHistory', JSON.stringify(history));
+    } catch (error) {
+        console.error("Failed to save bill history:", error);
+        toast({
+            title: "Error saving history",
+            description: "There was an issue saving the bill to your history.",
+            variant: "destructive",
+        });
+    }
     
     setTimeout(() => {
         router.push('/confirmation');

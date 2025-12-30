@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Home, LayoutDashboard, LogOut, Store } from "lucide-react";
+import { Home, LayoutDashboard, LogOut, Store, History } from "lucide-react";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -17,6 +17,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { href: "/shop-selection", label: "Home", icon: Home },
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/history", label: "History", icon: History },
   ];
 
   return (
@@ -50,7 +51,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <footer className="md:hidden fixed bottom-0 left-0 z-50 w-full h-16 border-t bg-card">
-          <div className="grid h-full max-w-lg grid-cols-3 mx-auto font-medium">
+          <div className="grid h-full max-w-lg grid-cols-4 mx-auto font-medium">
             {navLinks.map((link) => (
               <Link
                 key={`mobile-${link.href}`}

@@ -4,33 +4,16 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { BarChart, LineChart, PieChart, DollarSign, Receipt, Smartphone, Store } from "lucide-react";
+import { DollarSign, Receipt, Store } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
   ChartConfig
 } from "@/components/ui/chart";
-import { Bar, BarChart as RechartsBarChart, Line, LineChart as RechartsLineChart, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Pie, PieChart as RechartsPieChart, Cell } from "recharts";
-import type { DashboardStats, MonthlySummary } from "@/lib/types";
-
-// Mock data
-const mockStats: DashboardStats = {
-  totalSalesToday: 4250.75,
-  cashTotal: 1500.00,
-  upiTotal: 2750.75,
-  billCount: 15,
-  kapishSales: 2800.50,
-  sunnySales: 1450.25,
-};
-
-const mockMonthlySummary: MonthlySummary = {
-  totalRevenue: 125600.00,
-  dailySales: Array.from({ length: 30 }, (_, i) => ({
-    date: `Day ${i + 1}`,
-    sales: Math.floor(Math.random() * (7000 - 2000 + 1)) + 2000,
-  })),
-};
+import { Bar, BarChart as RechartsBarChart, Line, LineChart as RechartsLineChart, XAxis, YAxis, CartesianGrid, Pie, PieChart as RechartsPieChart, Cell, ResponsiveContainer } from "recharts";
+import type { Bill, DashboardStats, MonthlySummary } from "@/lib/types";
+import { isToday, isThisMonth, parseISO, subDays } from 'date-fns';
 
 const chartConfig = {
   sales: {
@@ -42,24 +25,84 @@ const chartConfig = {
 const pieChartConfig = {
     cash: { label: 'Cash', color: "hsl(var(--chart-1))" },
     upi: { label: 'UPI', color: "hsl(var(--chart-2))" },
-} satisfies ChartConfig
+} satisfies ChartConfig;
+
+const calculateStats = (bills: Bill[]): { stats: DashboardStats, monthly: MonthlySummary } => {
+    const today = new Date();
+    const billsToday = bills.filter(b => isToday(parseISO(b.createdAt)));
+    
+    const stats: DashboardStats = {
+        totalSalesToday: billsToday.reduce((acc, b) => acc + b.totalAmount, 0),
+        cashTotal: billsToday.filter(b => b.paymentMode === 'Cash').reduce((acc, b) => acc + b.totalAmount, 0),
+        upiTotal: billsToday.filter(b => b.paymentMode === 'UPI').reduce((acc, b) => acc + b.totalAmount, 0),
+        billCount: billsToday.length,
+        kapishSales: billsToday.filter(b => b.shopId === 'kapish').reduce((acc, b) => acc + b.totalAmount, 0),
+        sunnySales: billsToday.filter(b => b.shopId === 'sunny').reduce((acc, b) => acc + b.totalAmount, 0),
+    };
+    
+    const billsThisMonth = bills.filter(b => isThisMonth(parseISO(b.createdAt)));
+    const totalRevenue = billsThisMonth.reduce((acc, b) => acc + b.totalAmount, 0);
+
+    const dailySalesData: { [key: string]: number } = {};
+    const last30Days = Array.from({ length: 30 }, (_, i) => subDays(today, i));
+    
+    last30Days.forEach(day => {
+        const dayStr = day.toISOString().split('T')[0];
+        dailySalesData[dayStr] = 0;
+    });
+
+    bills.filter(b => parseISO(b.createdAt) >= subDays(today, 30)).forEach(bill => {
+        const dayStr = parseISO(bill.createdAt).toISOString().split('T')[0];
+        if (dailySalesData.hasOwnProperty(dayStr)) {
+            dailySalesData[dayStr] += bill.totalAmount;
+        }
+    });
+
+    const dailySales = Object.entries(dailySalesData)
+        .map(([date, sales]) => ({ date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), sales }))
+        .reverse();
+
+    const monthly: MonthlySummary = {
+        totalRevenue,
+        dailySales,
+    };
+
+    return { stats, monthly };
+};
+
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [stats, setStats] = useState(mockStats);
-  const [monthlySummary, setMonthlySummary] = useState(mockMonthlySummary);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [monthlySummary, setMonthlySummary] = useState<MonthlySummary | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem("isLoggedIn") !== "true") {
       router.replace("/login");
+      return;
     }
-    // In a real app, you would fetch this data from your backend
+    
+    try {
+        const storedBills = JSON.parse(localStorage.getItem('billsHistory') || '[]') as Bill[];
+        const { stats, monthly } = calculateStats(storedBills);
+        setStats(stats);
+        setMonthlySummary(monthly);
+    } catch (error) {
+        console.error("Failed to calculate stats:", error);
+        setStats({ totalSalesToday: 0, cashTotal: 0, upiTotal: 0, billCount: 0, kapishSales: 0, sunnySales: 0 });
+        setMonthlySummary({ totalRevenue: 0, dailySales: []});
+    }
+
   }, [router]);
   
-  const paymentData = [
+  const paymentData = stats ? [
       { name: 'Cash', value: stats.cashTotal, fill: 'hsl(var(--chart-1))' },
       { name: 'UPI', value: stats.upiTotal, fill: 'hsl(var(--chart-2))' },
-  ];
+  ] : [];
+
+  if (!stats || !monthlySummary) {
+      return <AppLayout><div>Loading dashboard...</div></AppLayout>
+  }
 
   return (
     <AppLayout>
@@ -116,8 +159,8 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:gap-8 lg:grid-cols-5">
         <Card className="lg:col-span-3">
             <CardHeader>
-                <CardTitle>Monthly Sales</CardTitle>
-                <CardDescription>Total Revenue: ₹{monthlySummary.totalRevenue.toFixed(2)}</CardDescription>
+                <CardTitle>Last 30 Days Sales</CardTitle>
+                <CardDescription>Monthly Revenue: ₹{monthlySummary.totalRevenue.toFixed(2)}</CardDescription>
             </CardHeader>
             <CardContent className="pl-2">
                 <ChartContainer config={chartConfig} className="h-[300px] w-full">
@@ -142,12 +185,13 @@ export default function DashboardPage() {
                  <ChartContainer config={pieChartConfig} className="h-[300px] w-full">
                     <ResponsiveContainer>
                         <RechartsPieChart>
-                             <RechartsTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                             <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
                             <Pie data={paymentData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
                                 const RADIAN = Math.PI / 180;
                                 const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                                 const x = cx + radius * Math.cos(-midAngle * RADIAN);
                                 const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                                if (percent === 0) return null;
                                 return (
                                 <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs font-bold">
                                     {`${(percent * 100).toFixed(0)}%`}
